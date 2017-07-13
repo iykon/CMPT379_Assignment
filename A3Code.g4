@@ -58,7 +58,7 @@ public class Symbol {
 public class SymTab {
 	
 	Symbol st[];
-    SymTab parent;
+    //SymTab parent;
 	int size;
 	int temps;
 
@@ -66,15 +66,17 @@ public class SymTab {
 		st = new Symbol[1000];
 		size = 0;
 		temps = 0;
-        parent = null;
+        //parent = null;
 	}
 
+    /*
     SymTab (SymTab parent) {
 		st = new Symbol[1000];
 		size = 0;
 		temps = 0;
         this.parent = parent;
     }
+    */
 
 	int Find (String n) {
 		for (int  i = 0; i < size; i ++) {
@@ -108,9 +110,11 @@ public class SymTab {
 		return (st[id].GetName()); 
 	}
 
+    /*
     SymTab getParent() {
         return parent;
     }
+    */
 
 	void Print() {
 		for (int  i = 0; i < size; i ++) {
@@ -268,7 +272,7 @@ statement
 }
 ;
 
-
+/*
 expr returns [int id]
 : literal 
 {
@@ -284,7 +288,151 @@ expr returns [int id]
 	q.Add($id, $e1.id, $e2.id, "+");
 }
 ;
+*/
 
+expr returns [int id]
+: e1=expr '||' e2=expr
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "||");
+}
+| e=expr7
+{
+    $id = $e.id;
+}
+;
+
+expr7 returns [int id]
+: e1=expr7 '&&' e2=expr7
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "&&");
+}
+| e=expr6
+{
+    $id = $e.id;
+}
+;
+
+expr6 returns [int id]
+: e1=expr6 '==' e2=expr6
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "==");
+}
+| e1=expr6 '!=' e2=expr6
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "!=");
+}
+| e=expr5
+{
+    $id = $e.id;
+}
+;
+
+expr5 returns [int id]
+: e1=expr5 '<' e2=expr5
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "<");
+}
+| e1=expr5 '<=' e2=expr5
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "<=");
+}
+| e1=expr5 '>' e2=expr5
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, ">");
+}
+| e1=expr5 '>=' e2=expr5
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, ">=");
+}
+| e=expr4
+{
+    $id = $e.id;
+}
+;
+
+expr4 returns [int id]
+: e1=expr4 '+' e2=expr4
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "+");
+}
+| e1=expr4 '-' e2=expr4
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "-");
+}
+| e=expr3
+{
+    $id = $e.id;
+}
+;
+
+expr3 returns [int id]
+: e1=expr3 '*' e2=expr3
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "*");
+}
+| e1=expr3 '/' e2=expr3
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "/");
+}
+| e1=expr3 '%' e2=expr3
+{
+    $id = s.Add(s.GetType($e1.id));
+    q.Add($id, $e1.id, $e2.id, "%");
+}
+| e=expr2
+{
+    $id = $e.id;
+}
+;
+
+expr2 returns [int id]
+: '-' e2=expr2
+{
+    $id = s.Add(s.GetType($e2.id));
+    int zero = s.insert("0", DataType.INT);
+    q.Add($id, zero, $e2.id, "-");
+    // how to deal with 0? for example, -c is interpreted to 0 - c
+}
+| '!' e2=expr2
+{
+    $id = s.Add(s.GetType($e2.id));
+    q.Add($id, -1, $e2.id, "!");
+    // how to deal with op '!'?
+}
+| e=expr1
+{
+    $id = $e.id;
+}
+;
+
+expr1 returns [int id]
+: '(' e=expr ')'
+{
+    $id = $e.id;
+}
+| location
+{
+}
+| //method_call
+{
+}
+| literal
+{
+    $id = $literal.id;
+}
+;
 
 location returns [int id]
 :Ident
