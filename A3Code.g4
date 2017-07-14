@@ -13,7 +13,7 @@ import java.io.*;
 @parser::members {
 
 public enum DataType {
-	INT, BOOLEAN, INVALID, VOID;
+	INT, BOOLEAN, CHAR, STRING, VOID, INVALID;
 
     public int getSize() {
         if(this == DataType.INT) {
@@ -152,7 +152,13 @@ public class Quad {
 		src1 = s1;
 		src2 = s2;
 		op = o;
-		out = label + ": " + s.GetName(dst) + " = " 
+        String dstop;
+        if(o.equals("param")) {
+            dstop = "";
+        } else {
+            dstop = " = ";
+        }
+		out = label + ": " + s.GetName(dst) + dstop
 				+ s.GetName(src1) + " " + op + " " + s.GetName(src2);
 	}
 
@@ -355,7 +361,7 @@ statements
 statement 
 : location '=' expr ';'
 {
-	q.Add($location.id, $expr.id, -1, "=");
+	q.Add($location.id, $expr.id, -1, "");
 }
 | method_call ';'
 {
@@ -368,6 +374,7 @@ statement
 }
 | Ret return_expr ';'
 {
+    q.Add(-1, $return_expr.id, -1, "ret");
 }
 | Brk ';'
 {
@@ -383,57 +390,74 @@ statement
 method_call returns [int id]
 : n=method_name '(' ps=method_params ')'
 {
+    if (s.GetType(s.Find($n.name)) == DataType.VOID) {
+        $id = -1;
+    } else {
+        $id = s.Add(s.GetType(s.Find($n.name)));
+    }
+    q.Add($id, s.Find($n.name), s.insert(String.valueOf($ps.count), DataType.INT), "call");
 }
 | Callout '(' Str a=callout_args ')'
 {
+    q.Add(-1, s.insert($Str.text, DataType.STRING), s.insert(String.valueOf($a.count), DataType.INT), "call");
 }
 ;
 
-method_name returns [int id]
+method_name returns [String name]
 : Ident
 {
+    $name = $Ident.text;
 }
 ;
 
-method_params
+method_params returns [int count]
 : ps=rest_method_params p=method_param
 {
+    $count = $ps.count + 1;
 }
 |
 {
+    $count = 0;
 }
 ;
 
 method_param
 : expr
 {
+    q.Add(-1, $expr.id, -1, "param");
 }
 ;
 
-rest_method_params
+rest_method_params returns [int count]
 : ps=rest_method_params p=method_param ','
 {
+    $count = $ps.count + 1;
 }
 |
 {
+    $count = 0;
 }
 ;
 
-callout_args
+callout_args returns [int count]
 : as=callout_args ',' a=callout_arg
 {
+    $count = $as.count + 1;
 }
 |
 {
+    $count = 0;
 }
 ;
 
 callout_arg
 : expr
 {
+    q.Add(-1, $expr.id, -1, "param");
 }
 | Str
 {
+    q.Add(-1, s.insert($Str.text, DataType.STRING), -1, "param");
 }
 ;
 
@@ -446,12 +470,14 @@ if_else
 }
 ;
 
-return_expr
+return_expr returns [int id]
 : expr
 {
+    $id = $expr.id;
 }
 |
 {
+    $id = -1;
 }
 ;
 
@@ -593,6 +619,7 @@ expr1 returns [int id]
 }
 | method_call
 {
+    $id = $method_call.id;
 }
 | literal
 {
