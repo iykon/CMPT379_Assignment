@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ### Configure the ANTLR
 Please see the instruction of Assignment 1
 

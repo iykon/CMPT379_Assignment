@@ -13,7 +13,17 @@ import java.io.*;
 @parser::members {
 
 public enum DataType {
-	INT, BOOLEAN, INVALID
+	INT, BOOLEAN, INVALID;
+
+    public int getSize() {
+        if(this == DataType.INT) {
+            return 4;
+        } else if(this == DataType.BOOLEAN) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
 }
 
 
@@ -205,20 +215,26 @@ field_decls
 
 
 field_decl returns [DataType t]
-: f=field_decl ',' Ident
+: f=field_decl ',' Ident array_loc
 {
 	$t = $f.t;
 	s.insert($Ident.text, $t);
 }
-| Type Ident
+| Type Ident array_loc
 {
 	$t = DataType.valueOf($Type.text.toUpperCase());
 	s.insert($Ident.text, $t);					
-	
 }
 ;
 
-
+array_loc
+: '[' num ']'
+{
+}
+|
+{
+}
+;
 
 
 method_decl 
@@ -540,6 +556,11 @@ location returns [int id]
 }
 | Ident '[' expr ']'
 {
+    DataType type = s.GetType(s.Find($Ident.text));
+    int size = s.insert(String.valueOf(type.getSize()), type); 
+    int t = s.Add(DataType.INT);
+    q.Add(t, size, $expr.id, "*");
+    $id = s.insert($Ident.text + " [ " + s.GetName(t) + " ]", type);
 }
 ;
 
