@@ -1,0 +1,20 @@
+a	INT
+b	INT
+c	INT
+t_0	INT
+t_1	INT
+t_2	INT
+0	INT
+t_3	INT
+t_4	INT
+t_5	INT
+------------------------------------
+L_0: t_0 = a + b
+L_1: t_1 = t_0 + c
+L_2: a = t_1 = 
+L_3: t_2 = 0 - c
+L_4: t_3 = b - t_2
+L_5: a = t_3 = 
+L_6: t_4 = b * c
+L_7: t_5 = a + t_4
+L_8: a = t_5 = 

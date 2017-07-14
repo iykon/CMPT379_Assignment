@@ -226,8 +226,28 @@ method_decl
 {
 	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()));
 }
+| Void Ident '(' params ')' block
+{
+}
 ;
 
+params
+: Type Ident nextParams
+{
+}
+|
+{
+}
+;
+
+nextParams
+: n=nextParams ',' Type Ident
+{
+}
+|
+{
+}
+;
 
 
 block 
@@ -270,25 +290,103 @@ statement
 {
 	q.Add($location.id, $expr.id, -1, "=");
 }
+| method_call
+{
+}
+| If '(' expr ')' block if_else
+{
+}
+| For Ident '=' e1=expr ',' e2=expr block
+{
+}
+| Ret return_expr ';'
+{
+}
+| Brk ';'
+{
+}
+| Cnt ';'
+{
+}
+| block
+{
+}
 ;
 
-/*
-expr returns [int id]
-: literal 
+method_call returns [int id]
+: n=method_name '(' ps=method_params ')' ';'
 {
-	$id = $literal.id;
 }
-| location
+| Callout '(' Str a=callout_args ')' ';'
 {
-	$id = $location.id;
-}
-| e1=expr '+' e2=expr
-{
-	$id = s.Add(s.GetType($e1.id));
-	q.Add($id, $e1.id, $e2.id, "+");
 }
 ;
-*/
+
+method_name returns [int id]
+: Ident
+{
+}
+;
+
+method_params
+: ps=rest_method_params p=method_param
+{
+}
+|
+{
+}
+;
+
+method_param
+: expr
+{
+}
+;
+
+rest_method_params
+: ps=rest_method_params p=method_param ','
+{
+}
+|
+{
+}
+;
+
+callout_args
+: as=callout_args ',' a=callout_arg
+{
+}
+|
+{
+}
+;
+
+callout_arg
+: expr
+{
+}
+| Str
+{
+}
+;
+
+if_else
+: Else block
+{
+}
+|
+{
+}
+;
+
+return_expr
+: expr
+{
+}
+|
+{
+}
+;
 
 expr returns [int id]
 : e1=expr '||' e2=expr
@@ -424,8 +522,9 @@ expr1 returns [int id]
 }
 | location
 {
+    $id = $location.id;
 }
-| //method_call
+| method_call
 {
 }
 | literal
