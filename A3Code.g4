@@ -185,9 +185,14 @@ public class QuadTab {
 		return (size ++);
 	}
 
-    int Add(String label) {
-        qt[size] = new Quad(label);
-        return (size ++);
+    void insert(String label, int pos) {
+        //qt[size] = new Quad(label);
+        //return (size ++);
+        qt[pos] = new Quad(label);
+    }
+
+    int reserve() {
+        return size++;
     }
 
 	void Print() {
@@ -202,6 +207,7 @@ public class QuadTab {
 
 
 QuadTab q = new QuadTab();
+int reserved_position;
 
 }
 
@@ -249,15 +255,15 @@ array_loc
 
 
 method_decl 
-: Type Ident '('  ')' block
+: Type Ident '('  ')' block_method
 {
 	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()));
-    q.Add($Ident.text);
+    q.insert($Ident.text, reserved_position);
 }
-| Void Ident '(' params ')' block
+| Void Ident '(' params ')' block_method
 {
 	s.insert($Ident.text, DataType.VOID);
-    q.Add($Ident.text);
+    q.insert($Ident.text, reserved_position);
 }
 ;
 
@@ -284,11 +290,14 @@ block
 : '{' var_decls statements '}'
 ;
 
+block_method
+: '{' var_decls_method statements '}'
+;
+
 var_decls 
 : v=var_decls var_decl ';'
 | 
 {
-
 }
 ;
 
@@ -303,11 +312,31 @@ var_decl returns [DataType t]
 {
 	$t = DataType.valueOf($Type.text.toUpperCase());
 	s.insert($Ident.text, $t);					
-	
 }
 ;
 
+var_decls_method
+: v=var_decls_method var_decl_method ';'
+{
+}
+|
+{
+    reserved_position = q.reserve(); 
+}
+;
 
+var_decl_method returns [DataType t]
+: v=var_decl_method ',' Ident
+{
+	$t = $v.t;
+	s.insert($Ident.text, $t);
+}
+| Type Ident
+{
+	$t = DataType.valueOf($Type.text.toUpperCase());
+	s.insert($Ident.text, $t);					
+}
+;
 
 statements 
 : statement t=statements
