@@ -13,7 +13,7 @@ import java.io.*;
 @parser::members {
 
 public enum DataType {
-	INT, BOOLEAN, INVALID;
+	INT, BOOLEAN, INVALID, VOID;
 
     public int getSize() {
         if(this == DataType.INT) {
@@ -139,24 +139,30 @@ SymTab s = new SymTab();
 
 public class Quad {
 
-	int label;
+	String label;
 	String op;
 	int src1;
 	int src2;
 	int dst;
-
+    String out;
 
 	Quad (int l, int d, int s1, int s2, String o) {
-		label = l;
+		label = "L_" + String.valueOf(l);
 		dst = d;
 		src1 = s1;
 		src2 = s2;
 		op = o;
+		out = label + ": " + s.GetName(dst) + " = " 
+				+ s.GetName(src1) + " " + op + " " + s.GetName(src2);
+	}
+
+	Quad (String l) {
+		label = l;
+        out = label + ":";
 	}
 
 	void Print () {
-		System.out.println("L_" + label + ": " + s.GetName(dst) + " = " 
-				+ s.GetName(src1) + " " + op + " " + s.GetName(src2));
+		System.out.println(out);
 	}
 
 }
@@ -178,6 +184,11 @@ public class QuadTab {
 		qt[size] = new Quad(size, dst, src1, src2, op);
 		return (size ++);
 	}
+
+    int Add(String label) {
+        qt[size] = new Quad(label);
+        return (size ++);
+    }
 
 	void Print() {
 		for (int  i = 0; i < size; i ++) {
@@ -241,9 +252,12 @@ method_decl
 : Type Ident '('  ')' block
 {
 	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()));
+    q.Add($Ident.text);
 }
 | Void Ident '(' params ')' block
 {
+	s.insert($Ident.text, DataType.VOID);
+    q.Add($Ident.text);
 }
 ;
 
