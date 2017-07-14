@@ -217,7 +217,7 @@ int reserved_position;
 // Session 2: Fill your code here
 //---------------------------------------------------------------------------------------------------
 prog
-: Class Program '{' field_decls method_decl '}'
+: Class Program '{' field_decls method_decls '}'
 {
 	s.Print();
 	System.out.println("------------------------------------");
@@ -253,6 +253,14 @@ array_loc
 }
 ;
 
+method_decls
+: m=method_decls method_decl
+{
+}
+|
+{
+}
+;
 
 method_decl 
 : Type Ident '('  ')' block_method
@@ -349,7 +357,7 @@ statement
 {
 	q.Add($location.id, $expr.id, -1, "=");
 }
-| method_call
+| method_call ';'
 {
 }
 | If '(' expr ')' block if_else
@@ -373,10 +381,10 @@ statement
 ;
 
 method_call returns [int id]
-: n=method_name '(' ps=method_params ')' ';'
+: n=method_name '(' ps=method_params ')'
 {
 }
-| Callout '(' Str a=callout_args ')' ';'
+| Callout '(' Str a=callout_args ')'
 {
 }
 ;
