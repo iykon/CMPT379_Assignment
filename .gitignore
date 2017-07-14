@@ -1,1 +1,5 @@
+#test_cases
 eval_test_cases/
+
+#swp file
+*.swp
