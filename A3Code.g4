@@ -26,23 +26,61 @@ public enum DataType {
     }
 }
 
+int global_scope = 0; // annotatable
 
+public class Scope {
 
+    int scope; // annotatable
+    Scope parent;
+
+    Scope () {
+        scope = ++global_scope; // annotatable
+        parent = null;
+    }
+
+    Scope (Scope pr) {
+        scope = ++global_scope; // annotatable
+        parent = pr;
+    }
+
+    Scope getParent() {
+        return parent;
+    }
+
+    int getScope() { // annotatable
+        return scope;
+    }
+
+    boolean isAncestor(Scope sc) {
+        for (Scope i = this; i != null; i = i.getParent()) {
+            if (i.equals(sc)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+}
+
+Scope csc = new Scope();
 
 
 public class Symbol {
 	
 	String name;
 	DataType dt;
+    Scope scope;
 
-	Symbol (String n, DataType d) {
+	Symbol (String n, DataType d, Scope sc) {
 		name = n;
 		dt = d;
+        scope = sc;
 	}
 
-	Symbol (int id, DataType d) {
+	Symbol (int id, DataType d, Scope sc) {
 		name = "t_" + id;
 		dt = d;
+        scope = sc;
 	}
 
 	boolean Equal (String n) {
@@ -58,17 +96,13 @@ public class Symbol {
 	}
 
 	void Print() {
-		System.out.println(name + "\t" + dt);
+		System.out.println(name + "\t" + dt + "\t" + scope.getScope()); // part annotatable
 	}
-
-	
-	
 }
 
 public class SymTab {
 	
 	Symbol st[];
-    //SymTab parent;
 	int size;
 	int temps;
 
@@ -76,36 +110,39 @@ public class SymTab {
 		st = new Symbol[1000];
 		size = 0;
 		temps = 0;
-        //parent = null;
 	}
 
-    /*
-    SymTab (SymTab parent) {
-		st = new Symbol[1000];
-		size = 0;
-		temps = 0;
-        this.parent = parent;
-    }
-    */
-
-	int Find (String n) {
-		for (int  i = 0; i < size; i ++) {
-			if (st[i].Equal(n)) return i;
+	int Find (String n, Scope scope) { // looks for the identifier from all scopes
+		for (int  i = size - 1; i >= 0; i --) {
+			if (scope.isAncestor(st[i].scope) && st[i].Equal(n))
+                return i;
 		}
 		
 		return -1;
 	}
 
-	int insert(String n, DataType d) {
-		int id = Find(n);
-		if (id != -1) return id;
-	
-		st[size] = new Symbol(n, d);
+	int insert(String n, DataType d, Scope scope) { // checks if identifier exists in local scope, if not, create a new one
+		for (int  i = size - 1; i >= 0; i --) {
+			if (scope.equals(st[i].scope) && st[i].Equal(n))
+                return i;
+		}
+		st[size] = new Symbol(n, d, scope);
 		return (size ++);
 	}
 
-	int Add (DataType d) {
-		st [size] = new Symbol (temps, d);
+    int insert(int n, Scope scope) {
+        Scope sc;
+        for (int i = 0; i < size; ++i) {
+            if (st[i].Equal(String.valueOf(n)))
+                return i;
+        }
+        for (sc = scope; sc.getParent() != null; sc = sc.getParent());
+        st[size] = new Symbol(String.valueOf(n), DataType.INT, sc);
+        return (size ++);
+    }
+
+	int Add (DataType d, Scope scope) {
+		st [size] = new Symbol (temps, d, scope);
 		temps ++;
 		return (size ++);
 	}
@@ -119,12 +156,6 @@ public class SymTab {
 		if (id == -1) return ("");
 		return (st[id].GetName()); 
 	}
-
-    /*
-    SymTab getParent() {
-        return parent;
-    }
-    */
 
 	void Print() {
 		for (int  i = 0; i < size; i ++) {
@@ -241,12 +272,12 @@ field_decl returns [DataType t]
 : f=field_decl ',' Ident array_loc
 {
 	$t = $f.t;
-	s.insert($Ident.text, $t);
+	s.insert($Ident.text, $t, csc);
 }
 | Type Ident array_loc
 {
 	$t = DataType.valueOf($Type.text.toUpperCase());
-	s.insert($Ident.text, $t);					
+	s.insert($Ident.text, $t, csc);
 }
 ;
 
@@ -262,21 +293,23 @@ array_loc
 method_decls
 : m=method_decls method_decl
 {
+    csc = new Scope(csc.getParent());
 }
 |
 {
+    csc = new Scope(csc);
 }
 ;
 
 method_decl 
 : Type Ident '('  ')' block_method
 {
-	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()));
+	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc.getParent());
     q.insert($Ident.text, reserved_position);
 }
 | Void Ident '(' params ')' block_method
 {
-	s.insert($Ident.text, DataType.VOID);
+	s.insert($Ident.text, DataType.VOID, csc.getParent());
     q.insert($Ident.text, reserved_position);
 }
 ;
@@ -302,6 +335,9 @@ nextParams
 
 block 
 : '{' var_decls statements '}'
+{
+    csc = csc.getParent();
+}
 ;
 
 block_method
@@ -312,6 +348,7 @@ var_decls
 : v=var_decls var_decl ';'
 | 
 {
+    csc = new Scope(csc);
 }
 ;
 
@@ -320,17 +357,17 @@ var_decl returns [DataType t]
 : v=var_decl ',' Ident
 {
 	$t = $v.t;
-	s.insert($Ident.text, $t);
+	s.insert($Ident.text, $t, csc);
 }
 | Type Ident
 {
 	$t = DataType.valueOf($Type.text.toUpperCase());
-	s.insert($Ident.text, $t);					
+	s.insert($Ident.text, $t, csc);					
 }
 ;
 
 var_decls_method
-: v=var_decls_method var_decl_method ';'
+: v=var_decls_method var_decl ';'
 {
 }
 |
@@ -339,18 +376,20 @@ var_decls_method
 }
 ;
 
+/*
 var_decl_method returns [DataType t]
 : v=var_decl_method ',' Ident
 {
 	$t = $v.t;
-	s.insert($Ident.text, $t);
+	s.insert($Ident.text, $t, csc);
 }
 | Type Ident
 {
 	$t = DataType.valueOf($Type.text.toUpperCase());
-	s.insert($Ident.text, $t);					
+	s.insert($Ident.text, $t, csc);
 }
 ;
+*/
 
 statements 
 : statement t=statements
@@ -390,16 +429,16 @@ statement
 method_call returns [int id]
 : n=method_name '(' ps=method_params ')'
 {
-    if (s.GetType(s.Find($n.name)) == DataType.VOID) {
+    if (s.GetType(s.Find($n.name, csc)) == DataType.VOID) {
         $id = -1;
     } else {
-        $id = s.Add(s.GetType(s.Find($n.name)));
+        $id = s.Add(s.GetType(s.Find($n.name, csc)), csc);
     }
-    q.Add($id, s.Find($n.name), s.insert(String.valueOf($ps.count), DataType.INT), "call");
+    q.Add($id, s.Find($n.name, csc), s.insert($ps.count, csc), "call");
 }
 | Callout '(' Str a=callout_args ')'
 {
-    q.Add(-1, s.insert($Str.text, DataType.STRING), s.insert(String.valueOf($a.count), DataType.INT), "call");
+    q.Add(-1, s.insert($Str.text, DataType.STRING, csc), s.insert($a.count, csc), "call");
 }
 ;
 
@@ -457,7 +496,7 @@ callout_arg
 }
 | Str
 {
-    q.Add(-1, s.insert($Str.text, DataType.STRING), -1, "param");
+    q.Add(-1, s.insert($Str.text, DataType.STRING, csc), -1, "param");
 }
 ;
 
@@ -484,7 +523,7 @@ return_expr returns [int id]
 expr returns [int id]
 : e1=expr '||' e2=expr
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "||");
 }
 | e=expr7
@@ -496,7 +535,7 @@ expr returns [int id]
 expr7 returns [int id]
 : e1=expr7 '&&' e2=expr7
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "&&");
 }
 | e=expr6
@@ -508,12 +547,12 @@ expr7 returns [int id]
 expr6 returns [int id]
 : e1=expr6 '==' e2=expr6
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "==");
 }
 | e1=expr6 '!=' e2=expr6
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "!=");
 }
 | e=expr5
@@ -525,22 +564,22 @@ expr6 returns [int id]
 expr5 returns [int id]
 : e1=expr5 '<' e2=expr5
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "<");
 }
 | e1=expr5 '<=' e2=expr5
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "<=");
 }
 | e1=expr5 '>' e2=expr5
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, ">");
 }
 | e1=expr5 '>=' e2=expr5
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, ">=");
 }
 | e=expr4
@@ -552,12 +591,12 @@ expr5 returns [int id]
 expr4 returns [int id]
 : e1=expr4 '+' e2=expr4
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "+");
 }
 | e1=expr4 '-' e2=expr4
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "-");
 }
 | e=expr3
@@ -569,17 +608,17 @@ expr4 returns [int id]
 expr3 returns [int id]
 : e1=expr3 '*' e2=expr3
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "*");
 }
 | e1=expr3 '/' e2=expr3
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "/");
 }
 | e1=expr3 '%' e2=expr3
 {
-    $id = s.Add(s.GetType($e1.id));
+    $id = s.Add(s.GetType($e1.id), csc);
     q.Add($id, $e1.id, $e2.id, "%");
 }
 | e=expr2
@@ -591,14 +630,14 @@ expr3 returns [int id]
 expr2 returns [int id]
 : '-' e2=expr2
 {
-    $id = s.Add(s.GetType($e2.id));
-    int zero = s.insert("0", DataType.INT);
+    $id = s.Add(s.GetType($e2.id), csc);
+    int zero = s.insert(0, csc);
     q.Add($id, zero, $e2.id, "-");
     // how to deal with 0? for example, -c is interpreted to 0 - c
 }
 | '!' e2=expr2
 {
-    $id = s.Add(s.GetType($e2.id));
+    $id = s.Add(s.GetType($e2.id), csc);
     q.Add($id, -1, $e2.id, "!");
     // how to deal with op '!'?
 }
@@ -630,15 +669,15 @@ expr1 returns [int id]
 location returns [int id]
 :Ident
 {
-	$id = s.Find($Ident.text);
+	$id = s.Find($Ident.text, csc);
 }
 | Ident '[' expr ']'
 {
-    DataType type = s.GetType(s.Find($Ident.text));
-    int size = s.insert(String.valueOf(type.getSize()), type); 
-    int t = s.Add(DataType.INT);
+    DataType type = s.GetType(s.Find($Ident.text, csc));
+    int size = s.insert(type.getSize(), csc); 
+    int t = s.Add(DataType.INT, csc);
     q.Add(t, size, $expr.id, "*");
-    $id = s.insert($Ident.text + " [ " + s.GetName(t) + " ]", type);
+    $id = s.insert($Ident.text + " [ " + s.GetName(t) + " ]", type, csc);
 }
 ;
 
@@ -656,11 +695,11 @@ num
 literal returns [int id]
 : num
 {
-	$id = s.insert($num.text, DataType.INT);
+	$id = s.insert(Integer.parseInt($num.text), csc);
 }
 | BoolLit
 {
-    $id = s.insert($BoolLit.text, DataType.BOOLEAN);
+    $id = s.insert($BoolLit.text, DataType.BOOLEAN, csc);
 }
 ;
 // maybe missing char and string
