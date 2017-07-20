@@ -121,11 +121,13 @@ public class SymTab {
 		return -1;
 	}
 
-	int insert(String n, DataType d, Scope scope) { // checks if identifier exists in local scope, if not, create a new one
+	int insert(String n, DataType d, Scope scope) {
+        /*
 		for (int  i = size - 1; i >= 0; i --) {
 			if (scope.equals(st[i].scope) && st[i].Equal(n))
                 return i;
 		}
+        */
 		st[size] = new Symbol(n, d, scope);
 		return (size ++);
 	}
@@ -200,7 +202,7 @@ public class Quad {
         } else if (o.equals("goto")) {
             //dstop = "";
             if (src1 == -1) {
-		        out = label + ": " + op + " L_" + String.valueOf(src2);
+		        out = label + ": " + op + " L_";
             } else if (dst == -1 ) {
 		        out = label + ": if " + s.GetName(src1) + " " + op + " L_";
             } else {
@@ -214,6 +216,7 @@ public class Quad {
 
 	Quad (String l) {
 		label = l;
+        op = "";
         out = label + ":";
 	}
 
@@ -242,7 +245,12 @@ public class QuadTab {
     void shift(int begin, int s) {
         if (begin < 0) return;
         for (int i = size - 1; i >= begin; --i) {
-            qt[i + s] = new Quad(i + s, qt[i].dst, qt[i].src1, qt[i].src2, qt[i].op);
+            if (qt[i].op.equals("goto") && qt[i].src2 >= begin) {
+                qt[i + s] = new Quad(i + s, qt[i].dst, qt[i].src1, qt[i].src2 + s, qt[i].op);
+                maxInstId(qt[i].src2 + s);
+            } else {
+                qt[i + s] = new Quad(i + s, qt[i].dst, qt[i].src1, qt[i].src2, qt[i].op);
+            }
         }
         size = size + s;
     }
@@ -253,6 +261,7 @@ public class QuadTab {
 		return (size ++);
 	}
 
+    // for adding dummy instruction only
     int Add(int label) {
         qt[size] = new Quad("L_" + String.valueOf(label));
         return size ++;
@@ -282,7 +291,6 @@ public class QuadTab {
 
     void backPatch(int pos, int src) {
         qt[pos].src2 = src;
-        qt[pos].appendOut(String.valueOf(src));
         maxInstId(src);
     }
 
@@ -302,6 +310,9 @@ public class QuadTab {
 
 	void Print() {
 		for (int  i = 0; i < size; i ++) {
+            if (qt[i].op.equals("goto")) {
+                qt[i].appendOut(String.valueOf(qt[i].src2));
+            }
 			qt[i].Print();
 		}
 	}
@@ -336,6 +347,16 @@ public class MyList {
         for (int i = 0; i < size; ++i) {
             list[i] = l.list[i];
         }
+    }
+
+    void shift(int s) {
+        for (int i = 0; i < size; ++i) {
+            list[i] += s;
+        }
+    }
+
+    void insert(int id) {
+        list[size ++] = id;
     }
 
     MyList merge(MyList l) {
@@ -408,7 +429,7 @@ method_decls
 ;
 
 method_decl 
-: Type Ident '('  ')' block_method
+: Type Ident '(' params ')' block_method
 {
 	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc.getParent());
     q.insert($Ident.text, reserved_position);
@@ -423,6 +444,7 @@ method_decl
 params
 : Type Ident nextParams
 {
+    s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc);
 }
 |
 {
@@ -432,6 +454,7 @@ params
 nextParams
 : n=nextParams ',' Type Ident
 {
+    s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc);
 }
 |
 {
@@ -439,12 +462,14 @@ nextParams
 ;
 
 
-block returns [int begin, int end]
+block returns [int begin, int end, MyList brk, MyList ctn]
 : '{' v=var_decls s=statements '}'
 {
     csc = csc.getParent();
     $begin = $v.begin;
     $end = $s.end;
+    $brk = $s.brk;
+    $ctn = $s.ctn;
 }
 ;
 
@@ -500,38 +525,48 @@ var_decl_method returns [DataType t]
 ;
 */
 
-statements returns [int end]
+statements returns [int end, MyList brk, MyList ctn]
 : statement t=statements
 {
     $end = $t.end;
+    $brk = $t.brk.merge($statement.brk);
+    $ctn = $t.ctn.merge($statement.ctn);
 }
 |
 {
     $end = q.getSize();
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 ;
 
 
-statement 
+statement returns [MyList brk, MyList ctn]
 : location '=' expr ';'
 {
 	q.Add($location.id, $expr.id, -1, "");
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 | method_call ';'
 {
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 | If '(' expr ')' block ie=if_else
 {
 
-    if ($ie.begin != -1) { // there is no else block
+    if ($ie.begin != -1) { // there is else block
         q.shift($ie.begin, 1);
+        $ie.brk.shift(1);
+        $ie.ctn.shift(1);
         q.insert(-1, -1, $ie.end + 1, "goto", $ie.begin);
         q.maxInstId($ie.end + 1);
 
         $ie.begin += 1;
         $ie.end += 1;
 
-    } else { // there is else block
+    } else { // there is no else block
 
         $ie.begin = $block.end;
         $ie.end = $block.end;
@@ -539,28 +574,80 @@ statement
     }
     
     for (int i = 0; i < $expr.tlist.size; ++i) {
+        System.out.println("xx: " + String.valueOf($expr.tlist.list[i]));
         q.backPatch($expr.tlist.list[i], $block.begin);
     }
 
     for (int i = 0; i < $expr.flist.size; ++i) {
+        System.out.println("yy: " + String.valueOf($expr.flist.list[i]));
         q.backPatch($expr.flist.list[i], $ie.begin);
     }
+
+    $brk = $block.brk.merge($ie.brk);
+    $ctn = $block.ctn.merge($ie.ctn);
 }
 | For Ident '=' e1=expr ',' e2=expr block
 {
+    // add initialization
+    if ($e2.flabel < 0) $e2.flabel = $block.begin;
+    q.shift($e2.flabel, 1);
+	int id = s.insert($Ident.text, DataType.INT, csc);
+    //System.out.println("in for: id is " + String.valueOf($e1.id));
+    //System.out.println("in for: e1.id is " + String.valueOf($e1.id));
+    //System.out.println("in for: e2.flabel is " + String.valueOf($e2.flabel));
+    q.insert(id, $e1.id, -1, "", $e2.flabel);
+    $e2.flabel ++;
+    $block.begin ++;
+    $block.end ++;
+
+    // add condition check
+    q.shift($block.begin, 3);
+    int tmpId= s.Add(DataType.INT, csc);
+    q.insert(tmpId, id, $e2.id, "<", $block.begin);
+    q.insert(-1, tmpId, -1, "goto", $block.begin + 1);
+    q.backPatch($block.begin + 1, $block.begin + 3);
+    q.insert(0, tmpId, -1, "goto", $block.begin + 2);
+    q.backPatch($block.begin + 2, $block.end + 6);
+    tmpId = s.Add(DataType.INT, csc);
+    int one = s.insert(1, csc);
+    q.Add(tmpId, id, s.insert(1, csc), "+");
+    q.Add(id, tmpId, -1, "");
+    q.Add(-1, -1, $e2.flabel, "goto");
+
+    $block.brk.shift(4);
+    $block.ctn.shift(4);
+    for (int i = 0; i < $block.brk.size; ++i) {
+        q.backPatch($block.brk.list[i], $block.end + 6);
+        //q.insert(-1, -1, $block.end + 6, "goto", $block.brk.list[i]);
+    }
+    for (int i = 0; i < $block.ctn.size; ++i) {
+        q.backPatch($block.ctn.list[i], $block.end + 3);
+        //q.insert(-1, -1, $block.end + 3, "goto", $block.ctn.list[i]);
+    }
+
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 | Ret return_expr ';'
 {
     q.Add(-1, $return_expr.id, -1, "ret");
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 | Brk ';'
 {
+    $brk = new MyList(q.Add(-1, -1, -1, "goto"));
+    $ctn = new MyList();
 }
 | Cnt ';'
 {
+    $brk = new MyList();
+    $ctn = new MyList(q.Add(-1, -1, -1, "goto"));
 }
 | block
 {
+    $brk = $block.brk;
+    $ctn = $block.ctn;
 }
 ;
 
@@ -638,16 +725,20 @@ callout_arg
 }
 ;
 
-if_else returns [int begin, int end]
+if_else returns [int begin, int end, MyList brk, MyList ctn]
 : Else block
 {
     $begin = $block.begin;
     $end = $block.end;
+    $brk = $block.brk;
+    $ctn = $block.ctn;
 }
 |
 {
     $begin = -1;
     $end = -1;
+    $brk = new MyList();
+    $ctn = new MyList();
 }
 ;
 
