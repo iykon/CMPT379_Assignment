@@ -548,6 +548,22 @@ statement returns [MyList brk, MyList ctn]
     $brk = new MyList();
     $ctn = new MyList();
 }
+| location '+=' expr ';'
+{
+    int tmp = s.Add(s.GetType($location.id), csc);
+    q.Add(tmp, $location.id, $expr.id, "+");
+    q.Add($location.id, tmp, -1, "");
+    $brk = new MyList();
+    $ctn = new MyList();
+}
+| location '-=' expr ';'
+{
+    int tmp = s.Add(s.GetType($location.id), csc);
+    q.Add(tmp, $location.id, $expr.id, "-");
+    q.Add($location.id, tmp, -1, "");
+    $brk = new MyList();
+    $ctn = new MyList();
+}
 | method_call ';'
 {
     $brk = new MyList();
@@ -1052,9 +1068,13 @@ num
 ;
 
 literal returns [int id]
-: num
+: DecNum
 {
-	$id = s.insert(Integer.parseInt($num.text), csc);
+	$id = s.insert(Integer.parseInt($DecNum.text), csc);
+}
+| HexNum
+{
+    $id = s.insert($HexNum.text, DataType.INT, csc);
 }
 | BoolLit
 {

@@ -1,22 +1,22 @@
-a	INT
-b	INT
-c	INT
-t_0	INT
-t_1	INT
-t_2	INT
-0	INT
-t_3	INT
-t_4	INT
-t_5	INT
-fun	VOID
+a	INT	1
+b	INT	1
+c	INT	1
+t_0	INT	2
+t_1	INT	2
+t_2	INT	2
+0	INT	1
+t_3	INT	2
+t_4	INT	2
+t_5	INT	2
+fun	VOID	1
 ------------------------------------
 fun:
 L_1: t_0 = a + b
 L_2: t_1 = t_0 + c
-L_3: a = t_1 = 
+L_3: a = t_1  
 L_4: t_2 = 0 - c
 L_5: t_3 = b - t_2
-L_6: a = t_3 = 
+L_6: a = t_3  
 L_7: t_4 = b * c
 L_8: t_5 = a + t_4
-L_9: a = t_5 = 
+L_9: a = t_5  
