@@ -19,7 +19,7 @@ public enum DataType {
         if(this == DataType.INT) {
             return 4;
         } else if(this == DataType.BOOLEAN) {
-            return 1;
+            return 4;
         } else {
             return 0;
         }
