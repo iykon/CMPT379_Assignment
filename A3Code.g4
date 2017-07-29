@@ -391,6 +391,7 @@ prog
 
 field_decls 
 : f=field_decls field_decl ';'
+| f=field_decls inited_field_decl ';'
 | 
 ;
 
@@ -414,6 +415,14 @@ array_loc
 }
 |
 {
+}
+;
+
+inited_field_decl
+: Type Ident '=' literal
+{
+	
+	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc);
 }
 ;
 
@@ -1030,16 +1039,23 @@ expr1 returns [int id, MyList tlist, MyList flist, int flabel]
     $flist = null;
     $flabel = $method_call.flabel;
 }
-| literal
+| intLiteral
 {
-    $id = $literal.id;
+    $id = $intLiteral.id;
     $tlist = null;
     $flist = null;
     $flabel = -1;
 }
+| boolLit
+{
+    $id = $boolLit.id;
+    $tlist = $boolLit.tlist;
+    $flist = $boolLit.flist;
+    $flabel = -1;
+}
 ;
 
-location returns [int id, int flabel]
+location returns [int id, int flabel] // flabel is first label of instruction, can be replaced by another implementation
 :Ident
 {
 	$id = s.Find($Ident.text, csc);
@@ -1056,10 +1072,25 @@ location returns [int id, int flabel]
 }
 ;
 
+literal
+: boolLit
+| intLiteral
+;
 
-BoolLit
+boolLit returns [int id, MyList tlist, MyList flist]
 : 'true'
+{
+    $id = s.insert("true", DataType.BOOLEAN, csc);
+    $tlist = new MyList(q.Add(-1, -1, -1, "goto"));
+    $flist = new MyList();
+
+}
 | 'false'
+{
+    $id = s.insert("false", DataType.BOOLEAN, csc);
+    $flist = new MyList(q.Add(-1, -1, -1, "goto"));
+    $flist = new MyList();
+}
 ;
 
 num
@@ -1067,7 +1098,7 @@ num
 | HexNum
 ;
 
-literal returns [int id]
+intLiteral returns [int id]
 : DecNum
 {
 	$id = s.insert(Integer.parseInt($DecNum.text), csc);
@@ -1076,11 +1107,8 @@ literal returns [int id]
 {
     $id = s.insert($HexNum.text, DataType.INT, csc);
 }
-| BoolLit
-{
-    $id = s.insert($BoolLit.text, DataType.BOOLEAN, csc);
-}
 ;
+
 // maybe missing char and string
 //--------------------------------------------- END OF SESSION 2 -----------------------------------
 
