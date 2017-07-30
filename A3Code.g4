@@ -122,12 +122,6 @@ public class SymTab {
 	}
 
 	int insert(String n, DataType d, Scope scope) {
-        /*
-		for (int  i = size - 1; i >= 0; i --) {
-			if (scope.equals(st[i].scope) && st[i].Equal(n))
-                return i;
-		}
-        */
 		st[size] = new Symbol(n, d, scope);
 		return (size ++);
 	}
@@ -144,7 +138,7 @@ public class SymTab {
     }
 
 	int Add (DataType d, Scope scope) {
-		st [size] = new Symbol (temps, d, scope);
+		st[size] = new Symbol (temps, d, scope);
 		temps ++;
 		return (size ++);
 	}
@@ -242,24 +236,16 @@ public class QuadTab {
         maxId = -1;
 	}
 
-    void shift(int begin, int s) {
-        if (begin < 0) return;
-        for (int i = size - 1; i >= begin; --i) {
-            if (qt[i].op.equals("goto") && qt[i].src2 >= begin) {
-                qt[i + s] = new Quad(i + s, qt[i].dst, qt[i].src1, qt[i].src2 + s, qt[i].op);
-                maxInstId(qt[i].src2 + s);
-            } else {
-                qt[i + s] = new Quad(i + s, qt[i].dst, qt[i].src1, qt[i].src2, qt[i].op);
-            }
-        }
-        size = size + s;
-    }
-
 	int Add(int dst, int src1, int src2, String op) {
 			
 		qt[size] = new Quad(size, dst, src1, src2, op);
 		return (size ++);
 	}
+    
+    int Add(String fn) {
+        qt[size] = new Quad(fn);
+        return (size ++);
+    }
 
     // for adding dummy instruction only
     int Add(int label) {
@@ -267,41 +253,17 @@ public class QuadTab {
         return size ++;
     }
 
-    void insert(String label, int pos) {
-        //qt[size] = new Quad(label);
-        //return (size ++);
-        qt[pos] = new Quad(label);
-    }
-
-    void insert(int dst, int src1, int src2, String op, int pos) {
-        qt[pos] = new Quad(pos, dst, src1, src2, op);
-    }
-
-        /*
-    int getHeadLoc (int pos) {
-        if (qt[pos - 1].op.equals("goto")) {
-            return pos - 2;
+    void backPatch(MyList l, int src) {
+        for (int i = 0; i < l.size; ++i) {
+            qt[l.list[i]].src2 = src;
+            maxInstId(src);
         }
-        return pos - 1;
-        while (qt[pos-1].op.equals("goto")) --pos;
-        while (!qt[pos-1].op.equals("goto")) --pos;
-        return pos;
-    }
-        */
-
-    void backPatch(int pos, int src) {
-        qt[pos].src2 = src;
-        maxInstId(src);
     }
 
     void maxInstId (int id) {
         if (id > maxId) {
             maxId = id;
         }
-    }
-
-    int reserve() {
-        return size++;
     }
 
     int getSize() {
@@ -323,7 +285,6 @@ public class QuadTab {
 
 
 QuadTab q = new QuadTab();
-int reserved_position;
 
 public class MyList {
 
@@ -438,15 +399,24 @@ method_decls
 ;
 
 method_decl 
-: Type Ident '(' params ')' block_method
+: method_sig '(' params ')' block
+{
+}
+| method_sig '(' params ')' block
+{
+}
+;
+
+method_sig
+: Type Ident
 {
 	s.insert($Ident.text, DataType.valueOf($Type.text.toUpperCase()), csc.getParent());
-    q.insert($Ident.text, reserved_position);
+    q.Add($Ident.text);
 }
-| Void Ident '(' params ')' block_method
+| Void Ident
 {
 	s.insert($Ident.text, DataType.VOID, csc.getParent());
-    q.insert($Ident.text, reserved_position);
+    q.Add($Ident.text);
 }
 ;
 
@@ -471,27 +441,20 @@ nextParams
 ;
 
 
-block returns [int begin, int end, MyList brk, MyList ctn]
+block returns [MyList brk, MyList ctn]
 : '{' v=var_decls s=statements '}'
 {
     csc = csc.getParent();
-    $begin = $v.begin;
-    $end = $s.end;
     $brk = $s.brk;
     $ctn = $s.ctn;
 }
 ;
 
-block_method
-: '{' var_decls_method statements '}'
-;
-
-var_decls returns [int begin]
+var_decls
 : v=var_decls var_decl ';'
 | 
 {
     csc = new Scope(csc);
-    $begin = q.getSize();
 }
 ;
 
@@ -509,41 +472,14 @@ var_decl returns [DataType t]
 }
 ;
 
-var_decls_method
-: v=var_decls_method var_decl ';'
-{
-}
-|
-{
-    reserved_position = q.reserve(); 
-}
-;
-
-/*
-var_decl_method returns [DataType t]
-: v=var_decl_method ',' Ident
-{
-	$t = $v.t;
-	s.insert($Ident.text, $t, csc);
-}
-| Type Ident
-{
-	$t = DataType.valueOf($Type.text.toUpperCase());
-	s.insert($Ident.text, $t, csc);
-}
-;
-*/
-
-statements returns [int end, MyList brk, MyList ctn]
+statements returns [MyList brk, MyList ctn]
 : statement t=statements
 {
-    $end = $t.end;
     $brk = $t.brk.merge($statement.brk);
     $ctn = $t.ctn.merge($statement.ctn);
 }
 |
 {
-    $end = q.getSize();
     $brk = new MyList();
     $ctn = new MyList();
 }
@@ -578,77 +514,31 @@ statement returns [MyList brk, MyList ctn]
     $brk = new MyList();
     $ctn = new MyList();
 }
-| If '(' expr ')' block ie=if_else
+| If '(' expr ')' marker block
 {
-
-    if ($ie.begin != -1) { // there is else block
-        q.shift($ie.begin, 1);
-        $ie.brk.shift(1);
-        $ie.ctn.shift(1);
-        q.insert(-1, -1, $ie.end + 1, "goto", $ie.begin);
-        q.maxInstId($ie.end + 1);
-
-        $ie.begin += 1;
-        $ie.end += 1;
-
-    } else { // there is no else block
-
-        $ie.begin = $block.end;
-        $ie.end = $block.end;
-
-    }
-    
-    for (int i = 0; i < $expr.tlist.size; ++i) {
-        System.out.println("xx: " + String.valueOf($expr.tlist.list[i]));
-        q.backPatch($expr.tlist.list[i], $block.begin);
-    }
-
-    for (int i = 0; i < $expr.flist.size; ++i) {
-        System.out.println("yy: " + String.valueOf($expr.flist.list[i]));
-        q.backPatch($expr.flist.list[i], $ie.begin);
-    }
-
-    $brk = $block.brk.merge($ie.brk);
-    $ctn = $block.ctn.merge($ie.ctn);
+    q.backPatch($expr.tlist, $marker.id);
+    q.backPatch($expr.flist, q.getSize());
+    $brk = $block.brk;
+    $ctn = $block.ctn;
 }
-| For Ident '=' e1=expr ',' e2=expr block
+| If '(' expr ')' m1=marker b1=block uj=unconditional_jump Else m2=marker b2=block
 {
-    // add initialization
-    if ($e2.flabel < 0) $e2.flabel = $block.begin;
-    q.shift($e2.flabel, 1);
-	int id = s.insert($Ident.text, DataType.INT, csc);
-    //System.out.println("in for: id is " + String.valueOf($e1.id));
-    //System.out.println("in for: e1.id is " + String.valueOf($e1.id));
-    //System.out.println("in for: e2.flabel is " + String.valueOf($e2.flabel));
-    q.insert(id, $e1.id, -1, "", $e2.flabel);
-    $e2.flabel ++;
-    $block.begin ++;
-    $block.end ++;
+    q.backPatch($expr.tlist, $m1.id);
+    q.backPatch($expr.flist, $m2.id);
+    q.backPatch($uj.nextlist, q.getSize());
 
-    // add condition check
-    q.shift($block.begin, 3);
-    int tmpId= s.Add(DataType.INT, csc);
-    q.insert(tmpId, id, $e2.id, "<", $block.begin);
-    q.insert(-1, tmpId, -1, "goto", $block.begin + 1);
-    q.backPatch($block.begin + 1, $block.begin + 3);
-    q.insert(0, tmpId, -1, "goto", $block.begin + 2);
-    q.backPatch($block.begin + 2, $block.end + 6);
-    tmpId = s.Add(DataType.INT, csc);
+    $brk = $block.brk.merge($b2.brk);
+    $ctn = $block.ctn.merge($b2.ctn);
+}
+| For for_init block marker
+{
+    int tmp = s.Add(DataType.INT, csc);
     int one = s.insert(1, csc);
-    q.Add(tmpId, id, s.insert(1, csc), "+");
-    q.Add(id, tmpId, -1, "");
-    q.Add(-1, -1, $e2.flabel, "goto");
-
-    $block.brk.shift(4);
-    $block.ctn.shift(4);
-    for (int i = 0; i < $block.brk.size; ++i) {
-        q.backPatch($block.brk.list[i], $block.end + 6);
-        //q.insert(-1, -1, $block.end + 6, "goto", $block.brk.list[i]);
-    }
-    for (int i = 0; i < $block.ctn.size; ++i) {
-        q.backPatch($block.ctn.list[i], $block.end + 3);
-        //q.insert(-1, -1, $block.end + 3, "goto", $block.ctn.list[i]);
-    }
+    q.Add(tmp, $for_init.id, one, "+");
+    q.Add(-1, -1, $for_init.mid, "goto");
+    
+    q.backPatch($block.brk, q.getSize());
+    q.backPatch($block.ctn, $marker.id);
 
     $brk = new MyList();
     $ctn = new MyList();
@@ -676,7 +566,27 @@ statement returns [MyList brk, MyList ctn]
 }
 ;
 
-method_call returns [int id, int flabel]
+for_init returns [MyList tlist, MyList flist, int mid, int id]
+: Ident '=' e1=expr ',' marker e2=expr
+{
+    $id = s.insert($Ident.text, DataType.INT, csc);
+    q.Add($id, $e1.id, -1, "");
+    int tmp = s.Add(DataType.INT, csc);
+    q.Add(tmp, $id, $e2.id, "<");
+    $tlist = new MyList(q.Add(-1, tmp, -1, "goto"));
+    $flist = new MyList(q.Add(0, tmp, -1, "goto"));
+    $mid = $marker.id;
+}
+;
+
+unconditional_jump returns [MyList nextlist]
+:
+{
+    $nextlist = new MyList(q.Add(-1, -1, -1, "goto"));
+}
+;
+
+method_call returns [int id]
 : n=method_name '(' ps=method_params ')'
 {
     if (s.GetType(s.Find($n.name, csc)) == DataType.VOID) {
@@ -684,11 +594,11 @@ method_call returns [int id, int flabel]
     } else {
         $id = s.Add(s.GetType(s.Find($n.name, csc)), csc);
     }
-    $flabel = q.Add($id, s.Find($n.name, csc), s.insert($ps.count, csc), "call");
+    q.Add($id, s.Find($n.name, csc), s.insert($ps.count, csc), "call");
 }
 | Callout '(' Str a=callout_args ')'
 {
-    $flabel = q.Add(-1, s.insert($Str.text, DataType.STRING, csc), s.insert($a.count, csc), "call");
+    q.Add(-1, s.insert($Str.text, DataType.STRING, csc), s.insert($a.count, csc), "call");
 }
 ;
 
@@ -750,23 +660,6 @@ callout_arg
 }
 ;
 
-if_else returns [int begin, int end, MyList brk, MyList ctn]
-: Else block
-{
-    $begin = $block.begin;
-    $end = $block.end;
-    $brk = $block.brk;
-    $ctn = $block.ctn;
-}
-|
-{
-    $begin = -1;
-    $end = -1;
-    $brk = new MyList();
-    $ctn = new MyList();
-}
-;
-
 return_expr returns [int id]
 : expr
 {
@@ -778,288 +671,203 @@ return_expr returns [int id]
 }
 ;
 
-expr returns [int id, MyList tlist, MyList flist, int flabel]
-: e1=expr '||' e2=expr
+expr returns [int id, MyList tlist, MyList flist]
+: e1=expr '||' marker e2=expr
 {
-    //$id = s.Add(s.GetType($e1.id), csc);
-    //q.Add($id, $e1.id, $e2.id, "||");
-
-    for (int i = 0; i < $e1.flist.size; ++i) {
-        q.backPatch($e1.flist.list[i], $e2.flabel);
-    }
-
+    q.backPatch($e1.flist, $marker.id);
     $tlist = $e1.tlist.merge($e2.tlist);
     $flist = $e2.flist;
-    $flabel = $e1.flabel;
 }
 | e=expr7
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr7 returns [int id, MyList tlist, MyList flist, int flabel]
-: e1=expr7 '&&' e2=expr7
+expr7 returns [int id, MyList tlist, MyList flist]
+: e1=expr7 '&&' marker e2=expr7
 {
-    //$id = s.Add(s.GetType($e1.id), csc);
-    //q.Add($id, $e1.id, $e2.id, "&&");
-
-    for (int i = 0; i < $e1.tlist.size; ++i) {
-        q.backPatch($e1.tlist.list[i], $e2.flabel);
-    }
-
+    q.backPatch($e1.tlist, $marker.id);
     $tlist = $e2.tlist;
     $flist = $e1.flist.merge($e2.flist);
-    $flabel = $e1.flabel;
 }
 | e=expr6
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr6 returns [int id, MyList tlist, MyList flist, int flabel]
+expr6 returns [int id, MyList tlist, MyList flist]
 : e1=expr6 '==' e2=expr6
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "==");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "==");
 
-    $tlist = new MyList (q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList (q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList (q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList (q.Add(0, $id, -1, "goto"));
 }
 | e1=expr6 '!=' e2=expr6
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "!=");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "!=");
 
-    $tlist = new MyList (q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList (q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList (q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList (q.Add(0, $id, -1, "goto"));
 }
 | e=expr5
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr5 returns [int id, MyList tlist, MyList flist, int flabel]
+expr5 returns [int id, MyList tlist, MyList flist]
 : e1=expr5 '<' e2=expr5
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "<");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "<");
 
-    $tlist = new MyList(q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList(q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList(q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList(q.Add(0, $id, -1, "goto"));
 }
 | e1=expr5 '<=' e2=expr5
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "<=");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "<=");
 
-    $tlist = new MyList(q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList(q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList(q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList(q.Add(0, $id, -1, "goto"));
 }
 | e1=expr5 '>' e2=expr5
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, ">");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, ">");
 
-    $tlist = new MyList(q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList(q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList (q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList(q.Add(0, $id, -1, "goto"));
 }
 | e1=expr5 '>=' e2=expr5
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, ">=");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, ">=");
 
-    $tlist = new MyList(q.getSize());
-    q.Add(-1, $id, -1, "goto");
-
-    $flist = new MyList(q.getSize());
-    q.Add(0, $id, -1, "goto");
+    $tlist = new MyList(q.Add(-1, $id, -1, "goto"));
+    $flist = new MyList(q.Add(0, $id, -1, "goto"));
 }
 | e=expr4
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr4 returns [int id, MyList tlist, MyList flist, int flabel]
+expr4 returns [int id, MyList tlist, MyList flist]
 : e1=expr4 '+' e2=expr4
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "+");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "+");
 }
 | e1=expr4 '-' e2=expr4
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "-");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "-");
 }
 | e=expr3
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr3 returns [int id, MyList tlist, MyList flist, int flabel]
+expr3 returns [int id, MyList tlist, MyList flist]
 : e1=expr3 '*' e2=expr3
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "*");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "*");
 }
 | e1=expr3 '/' e2=expr3
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "/");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "/");
 }
 | e1=expr3 '%' e2=expr3
 {
     $id = s.Add(s.GetType($e1.id), csc);
-    $flabel = q.Add($id, $e1.id, $e2.id, "%");
-    if ($e1.flabel >= 0) {
-        $flabel = $e1.flabel;
-    }
+    q.Add($id, $e1.id, $e2.id, "%");
 }
 | e=expr2
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr2 returns [int id, MyList tlist, MyList flist, int flabel]
+expr2 returns [int id, MyList tlist, MyList flist]
 : '-' e2=expr2
 {
     $id = s.Add(s.GetType($e2.id), csc);
     int zero = s.insert(0, csc);
-    $flabel = q.Add($id, zero, $e2.id, "-");
-    if ($e2.flabel >= 0) {
-        $flabel = $e2.flabel;
-    }
+    q.Add($id, zero, $e2.id, "-");
 }
 | '!' e2=expr2
 {
-    /*
-    $id = s.Add(s.GetType($e2.id), csc);
-    q.Add($id, -1, $e2.id, "!");
-    */
     $tlist = $e2.flist;
     $flist = $e2.tlist;
-    $flabel = $e2.flabel;
 }
 | e=expr1
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 ;
 
-expr1 returns [int id, MyList tlist, MyList flist, int flabel]
+expr1 returns [int id, MyList tlist, MyList flist]
 : '(' e=expr ')'
 {
     $id = $e.id;
     $tlist = $e.tlist;
     $flist = $e.flist;
-    $flabel = $e.flabel;
 }
 | location
 {
     $id = $location.id;
-    $tlist = null;
-    $flist = null;
-    $flabel = $location.flabel;
 }
 | method_call
 {
     $id = $method_call.id;
-    $tlist = null;
-    $flist = null;
-    $flabel = $method_call.flabel;
 }
 | intLiteral
 {
     $id = $intLiteral.id;
-    $tlist = null;
-    $flist = null;
-    $flabel = -1;
 }
 | boolLit
 {
     $id = $boolLit.id;
     $tlist = $boolLit.tlist;
     $flist = $boolLit.flist;
-    $flabel = -1;
 }
 ;
 
-location returns [int id, int flabel] // flabel is first label of instruction, can be replaced by another implementation
+marker returns [int id]
+:
+{
+    $id = q.getSize();
+}
+;
+
+location returns [int id]
 :Ident
 {
 	$id = s.Find($Ident.text, csc);
-    $flabel = -1;
     //System.out.println("xxx  " + $Ident.text + " " + String.valueOf($id));
 }
 | Ident '[' expr ']'
@@ -1067,7 +875,7 @@ location returns [int id, int flabel] // flabel is first label of instruction, c
     DataType type = s.GetType(s.Find($Ident.text, csc));
     int size = s.insert(type.getSize(), csc); 
     int t = s.Add(DataType.INT, csc);
-    $flabel = q.Add(t, size, $expr.id, "*");
+    q.Add(t, size, $expr.id, "*");
     $id = s.insert($Ident.text + " [ " + s.GetName(t) + " ]", type, csc);
 }
 ;
@@ -1146,12 +954,9 @@ fragment AlphaNum
 | Digit
 ;
 
-
 WhiteSpace
 : Delim+ -> skip
 ;
-
-
 
 Char
 : '\'' ~('\\') '\''
@@ -1161,8 +966,6 @@ Char
 Str
 :'"' ((~('\\' | '"')) | ('\\'.))* '"'
 ; 
-
-
 
 Class
 : 'class'
@@ -1208,15 +1011,9 @@ DecNum
 : Digit+
 ;
 
-
 HexNum
 : '0x'HexDigit+
 ;
-
-
-
-
-
 
 Type
 : 'int'
@@ -1226,9 +1023,3 @@ Type
 Ident
 : Alpha AlphaNum* 
 ;
-
-
-
-
-
-
