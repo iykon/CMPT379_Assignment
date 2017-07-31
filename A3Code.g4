@@ -343,9 +343,8 @@ prog
     if (q.maxId == q.size) {
         q.Add(q.maxId);
     }
-	s.Print();
-	System.out.println("------------------------------------");
-	//System.out.println(String.valueOf(q.maxId) + " " + String.valueOf(q.size));
+	//s.Print();
+	//System.out.println("------------------------------------");
 	q.Print();
 }
 ;
@@ -514,12 +513,12 @@ statement returns [MyList brk, MyList ctn]
     $brk = new MyList();
     $ctn = new MyList();
 }
-| If '(' expr ')' marker block
+| If '(' expr ')' marker b=block
 {
     q.backPatch($expr.tlist, $marker.id);
     q.backPatch($expr.flist, q.getSize());
-    $brk = $block.brk;
-    $ctn = $block.ctn;
+    $brk = $b.brk;
+    $ctn = $b.ctn;
 }
 | If '(' expr ')' m1=marker b1=block uj=unconditional_jump Else m2=marker b2=block
 {
@@ -527,18 +526,20 @@ statement returns [MyList brk, MyList ctn]
     q.backPatch($expr.flist, $m2.id);
     q.backPatch($uj.nextlist, q.getSize());
 
-    $brk = $block.brk.merge($b2.brk);
-    $ctn = $block.ctn.merge($b2.ctn);
+    $brk = $b1.brk.merge($b2.brk);
+    $ctn = $b1.ctn.merge($b2.ctn);
 }
-| For for_init block marker
+| For for_init m1=marker block m2=marker
 {
     int tmp = s.Add(DataType.INT, csc);
     int one = s.insert(1, csc);
     q.Add(tmp, $for_init.id, one, "+");
     q.Add(-1, -1, $for_init.mid, "goto");
     
+    q.backPatch($for_init.tlist, $m1.id);
+    q.backPatch($for_init.flist, $m2.id);
     q.backPatch($block.brk, q.getSize());
-    q.backPatch($block.ctn, $marker.id);
+    q.backPatch($block.ctn, $m2.id);
 
     $brk = new MyList();
     $ctn = new MyList();
@@ -868,7 +869,6 @@ location returns [int id]
 :Ident
 {
 	$id = s.Find($Ident.text, csc);
-    //System.out.println("xxx  " + $Ident.text + " " + String.valueOf($id));
 }
 | Ident '[' expr ']'
 {
